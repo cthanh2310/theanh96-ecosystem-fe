@@ -73,9 +73,55 @@ export default function MatchInteraction() {
   };
 
   const handlePredictionChange = (team: string, score: number) => {
-    setPredictions((preds) =>
-      preds.map((pred) => (pred.team === team ? { ...pred, score } : pred))
-    );
+    setPredictions(preds => {
+      const newPreds = preds.map(pred =>
+        pred.team === team ? { ...pred, score } : pred
+      );
+
+      // If we have a predicted winner, validate the scores
+      if (predictedWinner) {
+        const winnerPred = newPreds.find(p => p.team === predictedWinner);
+        const loserPred = newPreds.find(p => p.team !== predictedWinner);
+        
+        if (winnerPred && loserPred) {
+          // If the predicted winner's score is less than the loser's score,
+          // adjust the loser's score to be less than the winner's
+          if (winnerPred.score <= loserPred.score) {
+            return newPreds.map(pred =>
+              pred.team === loserPred.team
+                ? { ...pred, score: Math.max(0, winnerPred.score - 1) }
+                : pred
+            );
+          }
+        }
+      }
+
+      return newPreds;
+    });
+  };
+
+  const handleWinnerSelection = (team: string) => {
+    setPredictedWinner(team);
+    
+    // Adjust scores when winner is selected
+    setPredictions(preds => {
+      const winnerPred = preds.find(p => p.team === team);
+      const loserPred = preds.find(p => p.team !== team);
+      
+      if (winnerPred && loserPred) {
+        // If loser's score is greater than or equal to winner's score,
+        // adjust the loser's score to be less than the winner's
+        if (loserPred.score >= winnerPred.score) {
+          return preds.map(pred =>
+            pred.team === loserPred.team
+              ? { ...pred, score: Math.max(0, winnerPred.score - 1) }
+              : pred
+          );
+        }
+      }
+      
+      return preds;
+    });
   };
 
   const handleSubmitPrediction = () => {
@@ -84,12 +130,18 @@ export default function MatchInteraction() {
       predictions[0].score > 0 &&
       predictions[1].score > 0
     ) {
-      setIsPredictionSubmitted(true);
-      // Here you would typically send the prediction to your backend
-      console.log('Prediction submitted:', {
-        scores: predictions,
-        winner: predictedWinner,
-      });
+      const winnerPred = predictions.find(p => p.team === predictedWinner);
+      const loserPred = predictions.find(p => p.team !== predictedWinner);
+      
+      // Final validation before submission
+      if (winnerPred && loserPred && winnerPred.score > loserPred.score) {
+        setIsPredictionSubmitted(true);
+        // Here you would typically send the prediction to your backend
+        console.log('Prediction submitted:', {
+          scores: predictions,
+          winner: predictedWinner,
+        });
+      }
     }
   };
 
@@ -220,7 +272,7 @@ export default function MatchInteraction() {
         {!isPredictionSubmitted ? (
           <div className='space-y-6'>
             <div className='space-y-4'>
-              {predictions.map((prediction) => (
+              {predictions.map(prediction => (
                 <div
                   key={prediction.team}
                   className='flex items-center justify-between'
@@ -251,7 +303,7 @@ export default function MatchInteraction() {
                 {predictions.map((prediction) => (
                   <button
                     key={prediction.team}
-                    onClick={() => setPredictedWinner(prediction.team)}
+                    onClick={() => handleWinnerSelection(prediction.team)}
                     className={`p-4 rounded-lg border-2 transition-all ${
                       predictedWinner === prediction.team
                         ? 'border-green-500 bg-green-500/20'
@@ -282,10 +334,22 @@ export default function MatchInteraction() {
             <button
               onClick={handleSubmitPrediction}
               disabled={
-                !predictedWinner || predictions.some((p) => p.score === 0)
+                !predictedWinner || 
+                predictions.some((p) => p.score === 0) ||
+                (() => {
+                  const winnerPred = predictions.find(p => p.team === predictedWinner);
+                  const loserPred = predictions.find(p => p.team !== predictedWinner);
+                  return winnerPred && loserPred ? winnerPred.score <= loserPred.score : true;
+                })()
               }
               className={`w-full mt-6 px-6 py-3 rounded-lg font-semibold transition-all ${
-                !predictedWinner || predictions.some((p) => p.score === 0)
+                !predictedWinner || 
+                predictions.some((p) => p.score === 0) ||
+                (() => {
+                  const winnerPred = predictions.find(p => p.team === predictedWinner);
+                  const loserPred = predictions.find(p => p.team !== predictedWinner);
+                  return winnerPred && loserPred ? winnerPred.score <= loserPred.score : true;
+                })()
                   ? 'bg-gray-600 cursor-not-allowed'
                   : 'bg-green-500 hover:bg-green-600'
               }`}
